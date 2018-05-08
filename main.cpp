@@ -29,16 +29,41 @@ typedef struct Square {
 	int tl[2];
 	int br[2];
 	Color color;
+	int origPos[4];
 	Square(int x1, int y1, int x2, int y2) {
 		tl[0] = x1;
 		tl[1] = y1;
 		br[0] = x2;
 		br[1] = y2;
+		origPos[0] = origPos[1] = origPos[2] = origPos[3] = -1;
 		this->color = Color(255,0,0); // red
+	}
+	void fixOrigPos() {
+		origPos[0] = tl[0];
+		origPos[1] = tl[1];
+		origPos[2] = br[0];
+		origPos[3] = br[1];
 	}
 } Square;
 
 
+typedef struct Mouse {
+	int xpressed;
+	int ypressed;
+	int x; // current position
+	int y; // current position
+	int selected; // selected Object
+	Mouse() {
+		xpressed = ypressed = x = y = 0;
+		selected = -1;
+	}
+} Mouse;
+
+enum Tool {SELECT, CREATE };
+
+Tool currentTool = SELECT;
+
+Mouse mouse;
 
 vector<Square> objects;
 
@@ -84,6 +109,15 @@ bool checkBoundingBox(size_t index, int x, int y) {
 
 	return x >= min_x && x <= max_x && y <= max_y && y >= min_y;
 }
+void setSelectedObject(int x, int y) {
+	const size_t len = objects.size();
+	for (int i = len-1; i >= 0; i--) {
+		if(checkBoundingBox(i, x, y)) {
+			mouse.selected = i;
+			break;
+		}
+	}
+}
 
 void handleMouseClick(int button, int state, int x, int y) {
 	if(button != GLUT_LEFT_BUTTON)
@@ -91,31 +125,35 @@ void handleMouseClick(int button, int state, int x, int y) {
 	if(state == GLUT_DOWN) {
 		printf("button pressed at (%d, %d)\n", x, y);	
 		int mod = glutGetModifiers();
+		setSelectedObject(x, y);
 		if(mod == GLUT_ACTIVE_CTRL) {
-			const size_t len = objects.size();
-			for (int i = len-1; i >= 0; i--) {
-				if(checkBoundingBox(i, x, y)) {
-					objects[i].color = {0, 0, 255};
-					break;
-				}
+			if(mouse.selected > -1) {
+				objects[mouse.selected].color = {0, 0, 255};
+				glutPostRedisplay();
 			}
-			glutPostRedisplay();
 		}
 		else {
 			// only store the initial point
 			init_pos_x = x;
 			init_pos_y = y;
+			mouse.xpressed = x;
+			mouse.ypressed = y;
+			if(mouse.selected > -1) {
+				objects[mouse.selected].fixOrigPos();
+			}
+
 		}
 
 	}
 	else {
 		printf("button released at (%d, %d)\n", x, y);	
 		// Store the new square in our list of objects
-		if(mouseDidMove) {
+		if(currentTool == CREATE && mouseDidMove) {
 			Square s(init_pos_x, init_pos_y, x, y);
 			objects.push_back(s);
 		}
 		mouseDidMove = false;
+		mouse.selected = -1;
 		printf("SQUARES: %d\n", objects.size());
 
 //		drawRectangle(x,y);
@@ -130,12 +168,38 @@ void handleMouseMove(int x, int y) {
 	mouseDidMove = true;
 	// printf("Mouse position: (%d, %d)\n",x, y); 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	for(vector<Square>::iterator it = objects.begin(); it != objects.end(); ++it) {
-		drawRectAux(*it);
+
+
+
+	if(currentTool == CREATE) {
+		for(vector<Square>::iterator it = objects.begin(); it != objects.end(); ++it) {
+			drawRectAux(*it);
+		}
+		drawRectangle(x, y);
+		glutSwapBuffers();
+	}
+	else {
+		// Translate
+		if(mouse.selected > -1) {
+			int dx = x - mouse.xpressed;
+			int dy = y - mouse.ypressed;
+			Square * const selectedObj = &objects[mouse.selected];
+
+			// TODO: maybe shift this to translate() func
+			selectedObj->tl[0] = selectedObj->origPos[0] + dx;
+			selectedObj->tl[1] = selectedObj->origPos[1] + dy;
+			selectedObj->br[0] = selectedObj->origPos[2] + dx;
+			selectedObj->br[1] = selectedObj->origPos[3] + dy;
+
+			for(vector<Square>::iterator it = objects.begin(); it != objects.end(); ++it) {
+				drawRectAux(*it);
+			}
+			glutSwapBuffers();
+		}
+		mouse.x = x;
+		mouse.y = y;
 	}
 
-	drawRectangle(x, y);
-	glutSwapBuffers();
 	
 //	glutPostRedisplay();	
 }
@@ -164,6 +228,10 @@ void setup() {
 	glMatrixMode(GL_MODELVIEW);
 	// Allows setting coordinates in clockwise order
 	glFrontFace(GL_CW);
+
+	// Add two squares
+	objects.push_back(Square(20,20, 220, 220));
+	objects.push_back(Square(20,320, 220, 520));
 }
 int main(int argc, char ** argv) {
 	glutInit(&argc, argv);
