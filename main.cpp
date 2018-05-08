@@ -60,9 +60,9 @@ typedef struct Mouse {
 	}
 } Mouse;
 
-enum Tool {SELECT, CREATE, SCALE};
+enum Tool {SELECT, CREATE, SCALE, DELETE};
 
-Tool currentTool = SCALE;
+Tool currentTool = DELETE;
 
 Mouse mouse;
 
@@ -123,7 +123,9 @@ void setSelectedObject(int x, int y) {
 		}
 	}
 }
-
+void deleteSquare(int index) {
+	objects.erase(objects.begin() + index);
+}
 void handleMouseClick(int button, int state, int x, int y) {
 	if(button != GLUT_LEFT_BUTTON)
 		return;
@@ -156,6 +158,10 @@ void handleMouseClick(int button, int state, int x, int y) {
 		if(currentTool == CREATE && mouseDidMove) {
 			Square s(init_pos_x, init_pos_y, x, y);
 			objects.push_back(s);
+		}
+		if(currentTool == DELETE && !mouseDidMove && mouse.selected > -1) {
+			deleteSquare(mouse.selected);
+			glutPostRedisplay();
 		}
 		mouseDidMove = false;
 		mouse.selected = -1;
@@ -234,6 +240,8 @@ void fillScaleMatrix() {
 	}
 }
 void handleMousePassive(int x, int y) {
+	if(currentTool != SCALE)
+		return;
 	switch(scaleMatrix[x][y]) {
 		case 1:
 			glutSetCursor(GLUT_CURSOR_TOP_LEFT_CORNER);
@@ -287,6 +295,9 @@ void setup() {
 	if(currentTool == SCALE) {
 		memset(scaleMatrix, 0, sizeof(scaleMatrix));
 		fillScaleMatrix();
+	}
+	else if(currentTool == DELETE) {
+		glutSetCursor(GLUT_CURSOR_DESTROY);
 	}
 }
 int main(int argc, char ** argv) {
