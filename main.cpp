@@ -1,6 +1,7 @@
 #include <GL/glut.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <vector>
 using namespace std;
 
@@ -59,9 +60,9 @@ typedef struct Mouse {
 	}
 } Mouse;
 
-enum Tool {SELECT, CREATE };
+enum Tool {SELECT, CREATE, SCALE};
 
-Tool currentTool = SELECT;
+Tool currentTool = SCALE;
 
 Mouse mouse;
 
@@ -71,11 +72,15 @@ vector<Square> objects;
 float red = 1.0;
 float green = 1.0;
 float blue = 1.0;
-int width = 1000;
-int height = 800;
+const int width = 1000;
+const int height = 800;
 int init_pos_x = 0;
 int init_pos_y = 0;
 bool mouseDidMove = false;
+
+
+unsigned char scaleMatrix[width][height];
+
 
 void drawRectAux(Square &s) {
 	glColor3f(s.color.r/255.0, s.color.g/255.0, s.color.b/255.0);
@@ -178,7 +183,7 @@ void handleMouseMove(int x, int y) {
 		drawRectangle(x, y);
 		glutSwapBuffers();
 	}
-	else {
+	else if(currentTool == SELECT) {
 		// Translate
 		if(mouse.selected > -1) {
 			int dx = x - mouse.xpressed;
@@ -204,8 +209,49 @@ void handleMouseMove(int x, int y) {
 //	glutPostRedisplay();	
 }
 
+void fillScaleMatrix() {
+	for(vector<Square>::iterator it = objects.begin(); it != objects.end(); ++it) {
+		// Top left
+		int min_x = min(it->tl[0], it->br[0]);
+		int min_y = min(it->tl[1], it->br[1]);
+		int max_x = max(it->tl[0], it->br[0]);
+		int max_y = max(it->tl[1], it->br[1]);
+
+		// TODO: Check that the figure is large enough
+		// In clockwise fashion
+		for (int i = 0; i < 10; i++) {
+			for (int j = 0; j < 10; j++) {
+				scaleMatrix[min_x+i][min_y+j] = 1; // top left
+				scaleMatrix[max_x-j][min_y+i] = 2; // top right
+				scaleMatrix[max_x-j][max_y-i] = 3; // bottom right
+				scaleMatrix[min_x+j][max_y-i] = 4; // bottom right
+			}
+		}
 
 
+
+
+	}
+}
+void handleMousePassive(int x, int y) {
+	switch(scaleMatrix[x][y]) {
+		case 1:
+			glutSetCursor(GLUT_CURSOR_TOP_LEFT_CORNER);
+			break;
+		case 2:
+			glutSetCursor(GLUT_CURSOR_TOP_RIGHT_CORNER);
+			break;
+		case 3:
+			glutSetCursor(GLUT_CURSOR_BOTTOM_RIGHT_CORNER);
+			break;
+		case 4:
+			glutSetCursor(GLUT_CURSOR_BOTTOM_LEFT_CORNER);
+			break;
+		default: 
+			glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
+
+	}
+}
 
 
 void render() {
@@ -229,9 +275,19 @@ void setup() {
 	// Allows setting coordinates in clockwise order
 	glFrontFace(GL_CW);
 
+	// glutSetCursor(GLUT_CURSOR_BOTTOM_LEFT_CORNER);
 	// Add two squares
 	objects.push_back(Square(20,20, 220, 220));
 	objects.push_back(Square(20,320, 220, 520));
+	objects.push_back(Square(750,600, 790, 650));
+	objects[0].color = {0, 43, 54};
+	objects[1].color = {0, 43, 54};
+	objects[2].color = {0, 43, 54};
+
+	if(currentTool == SCALE) {
+		memset(scaleMatrix, 0, sizeof(scaleMatrix));
+		fillScaleMatrix();
+	}
 }
 int main(int argc, char ** argv) {
 	glutInit(&argc, argv);
@@ -244,6 +300,7 @@ int main(int argc, char ** argv) {
 	// register callbacks
 	glutDisplayFunc(render);
 	glutMouseFunc(handleMouseClick);
+	glutPassiveMotionFunc(handleMousePassive);
 	glutMotionFunc(handleMouseMove);	
 //	glutIdleFunc(renderScene);
 	
