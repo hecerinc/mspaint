@@ -2,18 +2,39 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <vector>
-
-
 using namespace std;
+
+typedef struct Color {
+	int r, g, b;
+	float alpha;
+	Color() {
+		r = g = b = 255;
+		alpha = 1.0;
+	}
+	Color(int r, int g, int b) {
+		this->r = r;
+		this->g = g;
+		this->b = b;
+		this->alpha = 1.0;
+	}
+	Color(int r, int g, int b, float a) {
+		this->r = r;
+		this->g = g;
+		this->b = b;
+		this->alpha = a;
+	}
+} Color;
 
 typedef struct Square {
 	int tl[2];
 	int br[2];
+	Color color;
 	Square(int x1, int y1, int x2, int y2) {
 		tl[0] = x1;
 		tl[1] = y1;
 		br[0] = x2;
 		br[1] = y2;
+		this->color = Color(255,0,0); // red
 	}
 } Square;
 
@@ -29,9 +50,10 @@ int width = 1000;
 int height = 800;
 int init_pos_x = 0;
 int init_pos_y = 0;
+bool mouseDidMove = false;
 
 void drawRectAux(Square &s) {
-	
+	glColor3f(s.color.r/255.0, s.color.g/255.0, s.color.b/255.0);
 	glBegin(GL_QUADS);
 		glVertex2i(s.tl[0], s.tl[1]);
 		glVertex2i(s.br[0], s.tl[1]);
@@ -41,10 +63,10 @@ void drawRectAux(Square &s) {
 }
 
 void drawRectangle(int x, int y) { 
-	glColor3f(1,0,0);		
+	glColor3f(1,0,0);
 
-	printf("---------------------------\n");
-	printf("init pos: (%d, %d)\n", init_pos_x, init_pos_y);
+	// printf("---------------------------\n");
+	// printf("init pos: (%d, %d)\n", init_pos_x, init_pos_y);
 	glBegin(GL_QUADS);
 		glVertex2i(init_pos_x, init_pos_y);
 		glVertex2i(x, init_pos_y);
@@ -53,20 +75,48 @@ void drawRectangle(int x, int y) {
 		glVertex2i(init_pos_x, y);
 	glEnd();
 }
+bool checkBoundingBox(size_t index, int x, int y) {
+	const Square * a = &objects[index];
+	int min_x = min(a->tl[0], a->br[0]);
+	int min_y = min(a->tl[1], a->br[1]);
+	int max_x = max(a->tl[0], a->br[0]);
+	int max_y = max(a->tl[1], a->br[1]);
+
+	return x >= min_x && x <= max_x && y <= max_y && y >= min_y;
+}
+
 void handleMouseClick(int button, int state, int x, int y) {
 	if(button != GLUT_LEFT_BUTTON)
 		return;
 	if(state == GLUT_DOWN) {
 		printf("button pressed at (%d, %d)\n", x, y);	
-		// only store the initial point
-		init_pos_x = x;
-		init_pos_y = y;
+		int mod = glutGetModifiers();
+		if(mod == GLUT_ACTIVE_CTRL) {
+			const size_t len = objects.size();
+			for (int i = len-1; i >= 0; i--) {
+				if(checkBoundingBox(i, x, y)) {
+					objects[i].color = {0, 0, 255};
+					break;
+				}
+			}
+			glutPostRedisplay();
+		}
+		else {
+			// only store the initial point
+			init_pos_x = x;
+			init_pos_y = y;
+		}
+
 	}
 	else {
 		printf("button released at (%d, %d)\n", x, y);	
 		// Store the new square in our list of objects
-		Square s(init_pos_x, init_pos_y, x, y);
-		objects.push_back(s);
+		if(mouseDidMove) {
+			Square s(init_pos_x, init_pos_y, x, y);
+			objects.push_back(s);
+		}
+		mouseDidMove = false;
+		printf("SQUARES: %d\n", objects.size());
 
 //		drawRectangle(x,y);
 //		glutSwapBuffers();
@@ -77,7 +127,8 @@ void handleMouseClick(int button, int state, int x, int y) {
 
 // Handle when the mouse is moving and a button is clicked
 void handleMouseMove(int x, int y) {
-	printf("Mouse position: (%d, %d)\n",x, y); 
+	mouseDidMove = true;
+	// printf("Mouse position: (%d, %d)\n",x, y); 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	for(vector<Square>::iterator it = objects.begin(); it != objects.end(); ++it) {
 		drawRectAux(*it);
